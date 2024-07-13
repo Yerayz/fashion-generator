@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fashion Generator</title>
+
+    <script src="assets/js/jquery.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap.min.css">
+    <script src="assets/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="assets/css/bootstrap-select.min.css">
+    <script src="assets/js/bootstrap-select.min.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="assets/css/index.css">
+
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js"></script> -->
+    
+</head>
+<body class="d-flex">
+    <div class="main-container d-flex">
+        <div class="col-md-6 d-flex flex-column align-items-end justify-content-center pe-6">
+            <div id="img_wrapper" class="d-flex bg-light p-3 rounded-3 shadow">
+                <canvas id="canvas" width="512" height="512"></canvas>
+            </div>
+            <div class="w-512">
+                <p id="error_msg" class="fs-5 lh-1 text-center text-danger text-wrap mt-5" style="display: none;"></p>
+            </div>
+            
+            
+        </div>
+        <div class="col-md-6 d-flex align-items-center justify-content-start ps-6">
+            <div class="d-flex flex-column mx-0 h-700 justify-content-between py-5">
+                <div class="p-0">
+                    <p class="fs-1 fw-bold lh-sm color-dark ps-0 mb-1">Fashion Generator</p>
+                    <p class="fs-3 lh-1 color-dark-brown ps-0 mb-0">Built with a Multi-label Conditional</p>
+                    <p class="fs-3 lh-1 color-dark-brown ps-0">Generative Adversarial Network</p>
+                </div>
+                <div class="group">
+                    <div class="form-group row mx-0 mb-3">
+                        <label for="" class="form-label fs-4 fw-bold color-dark px-0">Gender</label>
+                        <select id="select_gender" class="selectpicker dropdown px-0" data-style="btn-orange">
+                            <option value="-1" selected>Men</option>
+                            <option value="0">Women</option>
+                            <option value="1">Unisex</option>
+                          </select>
+                    </div>
+                    <div class="form-group row mx-0 mb-3">
+                        <label for="" class="form-label fs-4 fw-bold color-dark px-0">Master Category</label>
+                        <select id="select_mastercategory" class="selectpicker dropdown px-0" data-style="btn-orange">
+                            <option value="0.33" selected>Apparel</option>
+                            <option value="-0.33">Accessories</option>
+                            <option value="-1">Footwear</option>
+                            <option value="1">Personal Care</option>
+                          </select>
+                    </div>
+                    <div class="form-group row mx-0 mb-3">
+                        <label for="" class="form-label fs-4 fw-bold color-dark px-0">Season</label>
+                        <select id="select_season" class="selectpicker dropdown px-0" data-style="btn-orange">
+                            <option value="1" selected>Spring</option>
+                            <option value="-1">Summer</option>
+                            <option value="0.33">Fall</option>
+                            <option value="-0.33">Winter</option>
+                          </select>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <div id="generate-btn" class="d-flex align-items-center justify-content-center ms-0 me-5 p-1 rounded-3 shadow">
+                        <p class="fs-2 fw-bold color-light mb-1">Generate Image</p>
+                    </div>
+                    <img id="loading" src="assets/img/loading.gif" alt="loading" height="80px" style="display: none;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    
+    
+    <script>
+        $(document).ready(function() {
+            $('.selectpicker').selectpicker();
+
+            const $canvas = $('#canvas');
+            const context = $canvas[0].getContext('2d');
+
+            const gender = $('#select_gender')
+            const mastercategory = $('#select_mastercategory')
+            const season = $('#select_season')
+
+
+            $("#generate-btn").click(function(){
+                // console.log("generate-btn clicked, function started")
+                var btn = this
+                $(btn).css("pointer-events", "none");
+                $("#loading").show()
+
+                data = [ [parseFloat(gender.val())], [parseFloat(mastercategory.val())], [parseFloat(season.val())] ]
+                console.log("Data: "+data)
+
+                $.ajax({
+                    url: "https://yerayz-fashion-generator.hf.space/call/predict",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({ data: [ {"headers":["1"], "data": data} ] }),
+                    timeout: 10000,
+                    success: function(response) {
+                        event_id = response.event_id
+                        console.log("EventID: "+event_id)
+                        $.ajax({
+                            url: "https://yerayz-fashion-generator.hf.space/call/predict/" + event_id,
+                            type: "GET",
+                            timeout: 10000,
+                            success: function(response) {
+                                // console.log(response)
+                                reponse_arr = response.split("\": ")[2].replace(', \"metadata', '')
+                                // console.log(reponse_arr)
+                                image_arr = JSON.parse(reponse_arr)
+                                // console.log(image_arr)
+
+                                clampedArray = new Uint8ClampedArray(128 * 128 * 4);
+
+                                for (let i = 0; i < 128; i++) {
+                                    for (let j = 0; j < 128; j++) {
+                                        clampedArray[(i * 128 * 4) + (j * 4) + 0] = parseInt(image_arr[i][j][0] * 255);
+                                        clampedArray[(i * 128 * 4) + (j * 4) + 1] = parseInt(image_arr[i][j][1] * 255); 
+                                        clampedArray[(i * 128 * 4) + (j * 4) + 2] = parseInt(image_arr[i][j][2] * 255); 
+                                        clampedArray[(i * 128 * 4) + (j * 4) + 3] = 255;
+                                    }
+                                }
+
+                                imageData = new ImageData(clampedArray, 128, 128);
+                                
+                                context.putImageData(imageData, 0, 0);
+                                context.scale(4, 4);
+                                context.drawImage(context.canvas, 0, 0);
+                                context.setTransform(1, 0, 0, 1, 0, 0);
+                                
+                                $("#error_msg").hide()
+                                $(btn).css("pointer-events", "auto");
+                                $("#loading").hide()
+                                // console.log("function finished")
+                                
+                            },
+                            error: function(xhr, status, error) {
+                                if(error === 'timeout') {
+                                    $("#error_msg").text("GET request timed out while communicating with the server")
+                                } else {
+                                    $("#error_msg").text("An error occurred while attempting to send a GET request to the server")
+                                }
+                                $("#error_msg").show()
+                                $(btn).css("pointer-events", "auto");
+                                $("#loading").hide()
+                                // console.log("function finished")
+                            }
+                        })
+                    },
+                    error: function(xhr, status, error) {
+                        if(error === 'timeout') {
+                            $("#error_msg").text("POST request timed out while communicating with the server")
+                        } else {
+                            $("#error_msg").text("An error occurred while attempting to send a POST request to the server")
+                        }
+                        $("#error_msg").show()
+                        $(btn).css("pointer-events", "auto");
+                        $("#loading").hide()
+                        // console.log("function finished")
+                    }
+                })
+                
+            });
+
+        });
+    </script>
+    
+</body>
+</html>
